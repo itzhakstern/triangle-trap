@@ -220,6 +220,10 @@ button:hover {
   margin: 24px 0;
 }
 
+.setup-grid.compact {
+  margin-bottom: 0;
+}
+
 .players-config {
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
 }
@@ -260,6 +264,101 @@ button:hover {
 .field select:focus {
   border-color: rgba(255, 183, 74, 0.7);
   box-shadow: 0 0 0 4px rgba(255, 183, 74, 0.12);
+}
+
+.setup-step {
+  display: grid;
+  gap: 22px;
+}
+
+.step-badge {
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-soft);
+  font-weight: 700;
+}
+
+.mode-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.mode-card {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  padding: 22px;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.mode-card:hover {
+  transform: translateY(-2px);
+}
+
+.mode-card input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mode-card.is-selected {
+  border-color: rgba(255, 183, 74, 0.64);
+  background: linear-gradient(180deg, rgba(255, 183, 74, 0.14), rgba(255, 255, 255, 0.05));
+  box-shadow: 0 0 0 4px rgba(255, 183, 74, 0.1);
+}
+
+.mode-card-eyebrow {
+  color: var(--accent);
+  font-size: 0.84rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mode-card strong {
+  font-size: 1.1rem;
+  line-height: 1.5;
+}
+
+.setup-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.setup-hint {
+  color: var(--text-soft);
+  line-height: 1.6;
+}
+
+.setup-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.setup-summary div {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.setup-summary span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-soft);
+  font-size: 0.84rem;
+}
+
+.ai-difficulty-field {
+  animation: fadeUp 180ms ease;
 }
 
 .player-type-toggle {
@@ -362,6 +461,23 @@ button:hover {
 .score-card p {
   margin: 0;
   color: var(--text-soft);
+}
+
+.turn-timer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(255, 183, 74, 0.12);
+  border: 1px solid rgba(255, 183, 74, 0.18);
+}
+
+.turn-timer strong {
+  font-size: 1.3rem;
+  color: var(--accent);
 }
 
 .players-scoreboard {
@@ -518,6 +634,26 @@ canvas {
 
   .game-sidebar {
     position: static;
+  }
+
+  .mode-picker {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .setup-grid,
+  .setup-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .setup-actions {
+    display: grid;
+  }
+
+  .setup-actions .primary-btn,
+  .setup-actions .ghost-btn {
+    width: 100%;
   }
 }
 

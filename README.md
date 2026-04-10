@@ -4,19 +4,19 @@
   <img src="./docs/assets/triangle-trap-demo.gif" alt="Triangle Trap gameplay demo" width="720" />
 </p>
 
-A polished browser strategy game where players draw lines, close triangles, and outsmart each other on a dynamic geometric board.
+A polished browser strategy game where players draw lines, close shapes, and outsmart each other on dynamic geometric boards.
 
 ## How It Works
 
-- Players take turns connecting two points with a legal line.
-- A line cannot cross existing lines or pass too close to another point.
-- Closing a triangle earns a point.
-- When a player closes a triangle, they get another turn.
+- `Triangles` mode: connect any legal pair of points, avoid crossings, and close triangles.
+- `Rectangles` mode: play on a grid, connect neighboring points, and close boxes for points.
+- Closing a shape earns a point and grants another turn.
 - The game ends when no more legal moves remain.
 
 ## Features
 
 - Clean landing screen and focused game board
+- Two scoring modes: triangles and rectangles
 - Human and AI players
 - Avatar selection for each player
 - Live scoreboard and turn status

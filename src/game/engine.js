@@ -1,6 +1,6 @@
 const POINT_RADIUS = 8;
-const MIN_POINTS = 6;
-const MAX_POINTS = 14;
+const TRIANGLE_MIN_POINTS = 6;
+const TRIANGLE_MAX_POINTS = 14;
 
 function distance(a, b) {
   const dx = a.x - b.x;
@@ -92,6 +92,10 @@ function triangleKey(a, b, c) {
   return [a, b, c].sort((left, right) => left - right).join('_');
 }
 
+function cellKey(row, col) {
+  return `${row}_${col}`;
+}
+
 function createRandomPoints(count, width, height) {
   const out = [];
   const margin = 54;
@@ -152,7 +156,7 @@ function createWavePoints(count, width, height) {
   });
 }
 
-function createPointsByLayout(layout, count, width, height) {
+function createTrianglePoints(layout, count, width, height) {
   switch (layout) {
     case 'circle':
       return createCirclePoints(count, width, height);
@@ -163,79 +167,270 @@ function createPointsByLayout(layout, count, width, height) {
   }
 }
 
+function createGridPoints(rows, cols, width, height) {
+  const horizontalMargin = 110;
+  const verticalMargin = 96;
+  const stepX = cols === 1 ? 0 : (width - horizontalMargin * 2) / (cols - 1);
+  const stepY = rows === 1 ? 0 : (height - verticalMargin * 2) / (rows - 1);
+  const points = [];
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      points.push({
+        id: points.length,
+        row,
+        col,
+        x: horizontalMargin + col * stepX,
+        y: verticalMargin + row * stepY,
+      });
+    }
+  }
+
+  return points;
+}
+
+function getGridPointId(row, col, cols) {
+  return row * cols + col;
+}
+
+function buildModeDefinition(config, width, height) {
+  const mode = config.mode ?? 'triangles';
+
+  if (mode === 'rectangles') {
+    const rows = Math.max(4, Number(config.gridRows) || 5);
+    const cols = Math.max(4, Number(config.gridCols) || 5);
+    const points = createGridPoints(rows, cols, width, height);
+    const cells = [];
+
+    for (let row = 0; row < rows - 1; row += 1) {
+      for (let col = 0; col < cols - 1; col += 1) {
+        cells.push({
+          id: cellKey(row, col),
+          row,
+          col,
+          points: [
+            getGridPointId(row, col, cols),
+            getGridPointId(row, col + 1, cols),
+            getGridPointId(row + 1, col + 1, cols),
+            getGridPointId(row + 1, col, cols),
+          ],
+          edges: [
+            edgeKey(getGridPointId(row, col, cols), getGridPointId(row, col + 1, cols)),
+            edgeKey(getGridPointId(row, col + 1, cols), getGridPointId(row + 1, col + 1, cols)),
+            edgeKey(getGridPointId(row + 1, col, cols), getGridPointId(row + 1, col + 1, cols)),
+            edgeKey(getGridPointId(row, col, cols), getGridPointId(row + 1, col, cols)),
+          ],
+        });
+      }
+    }
+
+    return {
+      id: mode,
+      points,
+      rows,
+      cols,
+      layout: 'grid',
+      minPoints: points.length,
+      maxPoints: points.length,
+      pointCount: points.length,
+      cells,
+      scoreUnitLabel: 'מרובעים',
+      scoreUnitSingular: 'מרובע',
+      shapeType: 'rectangle',
+      canAddEdgeByGeometry(a, b, state, hasEdge) {
+        if (a === b || hasEdge(a, b)) {
+          return false;
+        }
+
+        const start = state.points[a];
+        const end = state.points[b];
+        const rowDistance = Math.abs(start.row - end.row);
+        const colDistance = Math.abs(start.col - end.col);
+        return (rowDistance === 1 && colDistance === 0) || (rowDistance === 0 && colDistance === 1);
+      },
+      getScorePreview(a, b, context) {
+        let count = 0;
+        for (const cell of context.cellsByEdge.get(edgeKey(a, b)) ?? []) {
+          if (!context.shapeLookup.has(cell.id) && cell.edges.every((key) => key === edgeKey(a, b) || context.edgeLookup.has(key))) {
+            count += 1;
+          }
+        }
+        return count;
+      },
+      addShapesForEdge(a, b, owner, context) {
+        const addedShapes = [];
+        for (const cell of context.cellsByEdge.get(edgeKey(a, b)) ?? []) {
+          if (context.shapeLookup.has(cell.id)) {
+            continue;
+          }
+
+          if (!cell.edges.every((key) => context.edgeLookup.has(key))) {
+            continue;
+          }
+
+          const shape = {
+            id: cell.id,
+            owner,
+            type: 'rectangle',
+            points: cell.points,
+          };
+          context.shapeLookup.add(cell.id);
+          context.state.shapes.push(shape);
+          addedShapes.push(shape);
+        }
+
+        return addedShapes;
+      },
+    };
+  }
+
+  const pointCount = Math.min(
+    TRIANGLE_MAX_POINTS,
+    Math.max(TRIANGLE_MIN_POINTS, Number(config.pointCount) || 9),
+  );
+  const layout = config.layout ?? 'random';
+
+  return {
+    id: mode,
+    points: createTrianglePoints(layout, pointCount, width, height),
+    layout,
+    minPoints: TRIANGLE_MIN_POINTS,
+    maxPoints: TRIANGLE_MAX_POINTS,
+    pointCount,
+    scoreUnitLabel: 'משולשים',
+    scoreUnitSingular: 'משולש',
+    shapeType: 'triangle',
+    canAddEdgeByGeometry(a, b, state, hasEdge) {
+      if (a === b || hasEdge(a, b)) {
+        return false;
+      }
+
+      const start = state.points[a];
+      const end = state.points[b];
+      const minimumClearance = POINT_RADIUS + 5;
+
+      for (const edge of state.edges) {
+        if (edge.a === a || edge.a === b || edge.b === a || edge.b === b) {
+          continue;
+        }
+
+        if (isIntersecting(start, end, state.points[edge.a], state.points[edge.b])) {
+          return false;
+        }
+      }
+
+      for (let index = 0; index < state.points.length; index += 1) {
+        if (index === a || index === b) {
+          continue;
+        }
+
+        if (pointSegmentDistance(state.points[index], start, end) <= minimumClearance) {
+          return false;
+        }
+      }
+
+      return true;
+    },
+    getScorePreview(a, b, context) {
+      let count = 0;
+      const smallerSet = context.neighbors[a].size <= context.neighbors[b].size ? context.neighbors[a] : context.neighbors[b];
+      const largerSet = smallerSet === context.neighbors[a] ? context.neighbors[b] : context.neighbors[a];
+
+      for (const c of smallerSet) {
+        if (largerSet.has(c) && !context.shapeLookup.has(triangleKey(a, b, c))) {
+          count += 1;
+        }
+      }
+
+      return count;
+    },
+    addShapesForEdge(a, b, owner, context) {
+      const addedShapes = [];
+      const smallerSet = context.neighbors[a].size <= context.neighbors[b].size ? context.neighbors[a] : context.neighbors[b];
+      const largerSet = smallerSet === context.neighbors[a] ? context.neighbors[b] : context.neighbors[a];
+
+      for (const c of smallerSet) {
+        const key = triangleKey(a, b, c);
+        if (largerSet.has(c) && !context.shapeLookup.has(key)) {
+          const shape = {id: key, owner, type: 'triangle', points: [a, b, c]};
+          context.shapeLookup.add(key);
+          context.state.shapes.push(shape);
+          addedShapes.push(shape);
+        }
+      }
+
+      return addedShapes;
+    },
+  };
+}
+
 export function createGame(config) {
   const width = config.boardWidth ?? 960;
   const height = config.boardHeight ?? 680;
+  const modeDefinition = buildModeDefinition(config, width, height);
   const playerCount = config.players.length;
-  const pointCount = Math.min(MAX_POINTS, Math.max(MIN_POINTS, Number(config.pointCount) || 9));
-  const layout = config.layout ?? 'random';
 
   const players = config.players.map((player) => ({
     ...player,
-    triangleColor: colorWithAlpha(player.color, 0.22),
+    shapeColor: colorWithAlpha(player.color, 0.22),
   }));
 
   const state = {
     width,
     height,
     pointRadius: POINT_RADIUS,
-    minPoints: MIN_POINTS,
-    maxPoints: MAX_POINTS,
-    points: createPointsByLayout(layout, pointCount, width, height),
+    minPoints: modeDefinition.minPoints,
+    maxPoints: modeDefinition.maxPoints,
+    pointCount: modeDefinition.pointCount,
+    points: modeDefinition.points,
     edges: [],
-    triangles: [],
+    shapes: [],
     players,
     currentPlayer: 0,
     selectedPoint: null,
     scores: new Array(playerCount).fill(0),
     isGameOver: false,
     winnerNames: [],
-    layout,
+    layout: modeDefinition.layout,
+    mode: modeDefinition.id,
+    shapeType: modeDefinition.shapeType,
+    scoreUnitLabel: modeDefinition.scoreUnitLabel,
+    scoreUnitSingular: modeDefinition.scoreUnitSingular,
+    grid: modeDefinition.rows && modeDefinition.cols ? {rows: modeDefinition.rows, cols: modeDefinition.cols} : null,
+    moveTimeLimit: Math.max(0, Number(config.moveTimeLimit) || 0),
   };
 
   const edgeLookup = new Set();
-  const triangleLookup = new Set();
+  const shapeLookup = new Set();
   const neighbors = Array.from({length: state.points.length}, () => new Set());
   const legalMoves = new Map();
+  const cellsByEdge = new Map();
+
+  if (modeDefinition.cells) {
+    for (const cell of modeDefinition.cells) {
+      for (const key of cell.edges) {
+        if (!cellsByEdge.has(key)) {
+          cellsByEdge.set(key, []);
+        }
+        cellsByEdge.get(key).push(cell);
+      }
+    }
+  }
+
+  const modeContext = {
+    state,
+    edgeLookup,
+    shapeLookup,
+    neighbors,
+    cellsByEdge,
+  };
 
   function hasEdge(a, b) {
     return edgeLookup.has(edgeKey(a, b));
   }
 
-  function triangleExists(a, b, c) {
-    return triangleLookup.has(triangleKey(a, b, c));
-  }
-
   function canAddEdgeByGeometry(a, b) {
-    if (a === b || hasEdge(a, b)) {
-      return false;
-    }
-
-    const start = state.points[a];
-    const end = state.points[b];
-    const minimumClearance = POINT_RADIUS + 5;
-
-    for (const edge of state.edges) {
-      if (edge.a === a || edge.a === b || edge.b === a || edge.b === b) {
-        continue;
-      }
-
-      if (isIntersecting(start, end, state.points[edge.a], state.points[edge.b])) {
-        return false;
-      }
-    }
-
-    for (let index = 0; index < state.points.length; index += 1) {
-      if (index === a || index === b) {
-        continue;
-      }
-
-      if (pointSegmentDistance(state.points[index], start, end) <= minimumClearance) {
-        return false;
-      }
-    }
-
-    return true;
+    return modeDefinition.canAddEdgeByGeometry(a, b, state, hasEdge);
   }
 
   function canAddEdge(a, b) {
@@ -257,6 +452,10 @@ export function createGame(config) {
   function updateLegalMovesAfterEdge(a, b) {
     legalMoves.delete(edgeKey(a, b));
 
+    if (state.mode !== 'triangles') {
+      return;
+    }
+
     for (const [key, move] of legalMoves) {
       const [left, right] = move;
 
@@ -270,45 +469,126 @@ export function createGame(config) {
     }
   }
 
+  function createSimulation() {
+    const simulationState = {
+      edges: state.edges.map((edge) => ({...edge})),
+      shapes: state.shapes.map((shape) => ({...shape})),
+    };
+    const simulationEdgeLookup = new Set(edgeLookup);
+    const simulationShapeLookup = new Set(shapeLookup);
+    const simulationNeighbors = neighbors.map((neighborSet) => new Set(neighborSet));
+    const simulationLegalMoves = new Map(legalMoves);
+
+    return {
+      state: simulationState,
+      edgeLookup: simulationEdgeLookup,
+      shapeLookup: simulationShapeLookup,
+      neighbors: simulationNeighbors,
+      legalMoves: simulationLegalMoves,
+      cellsByEdge,
+    };
+  }
+
+  function updateSimulationLegalMovesAfterEdge(simulation, a, b) {
+    simulation.legalMoves.delete(edgeKey(a, b));
+
+    if (state.mode !== 'triangles') {
+      return;
+    }
+
+    for (const [key, move] of simulation.legalMoves) {
+      const [left, right] = move;
+
+      if (left === a || left === b || right === a || right === b) {
+        continue;
+      }
+
+      if (isIntersecting(state.points[a], state.points[b], state.points[left], state.points[right])) {
+        simulation.legalMoves.delete(key);
+      }
+    }
+  }
+
+  function countSimulationPotentialShapes(simulation, a, b) {
+    return modeDefinition.getScorePreview(a, b, simulation);
+  }
+
+  function applyMoveToSimulation(simulation, a, b, owner) {
+    const key = edgeKey(a, b);
+
+    if (!simulation.legalMoves.has(key)) {
+      return null;
+    }
+
+    simulation.edgeLookup.add(key);
+    simulation.neighbors[a].add(b);
+    simulation.neighbors[b].add(a);
+    simulation.state.edges.push({a, b, owner});
+    updateSimulationLegalMovesAfterEdge(simulation, a, b);
+    const newShapes = modeDefinition.addShapesForEdge(a, b, owner, simulation);
+
+    return {
+      shapeCount: newShapes.length,
+      nextPlayer: newShapes.length > 0 ? owner : (owner + 1) % state.players.length,
+      remainingMoves: simulation.legalMoves.size,
+    };
+  }
+
+  function evaluateMove(a, b, owner, difficulty) {
+    const immediateScore = countPotentialShapes(a, b);
+
+    if (difficulty === 'easy') {
+      return Math.random();
+    }
+
+    if (difficulty === 'medium') {
+      return immediateScore * 100 + Math.random() * 8;
+    }
+
+    const simulation = createSimulation();
+    const simulationResult = applyMoveToSimulation(simulation, a, b, owner);
+
+    if (!simulationResult) {
+      return -Infinity;
+    }
+
+    const remainingMoves = Array.from(simulation.legalMoves.values());
+    let nextBestScore = 0;
+
+    if (simulationResult.nextPlayer !== owner) {
+      for (const [nextA, nextB] of remainingMoves) {
+        nextBestScore = Math.max(nextBestScore, countSimulationPotentialShapes(simulation, nextA, nextB));
+      }
+    }
+
+    let pressureScore = 0;
+    for (const [nextA, nextB] of remainingMoves) {
+      pressureScore += countSimulationPotentialShapes(simulation, nextA, nextB);
+    }
+
+    return (
+      immediateScore * 1000 +
+      (simulationResult.nextPlayer === owner ? 180 : 0) -
+      nextBestScore * 120 -
+      pressureScore * 4 -
+      remainingMoves.length * 0.1 +
+      Math.random() * 0.01
+    );
+  }
+
   function getPossibleMoves() {
     return Array.from(legalMoves.values());
   }
 
-  function countPotentialTriangles(a, b) {
-    let count = 0;
-
-    const smallerSet = neighbors[a].size <= neighbors[b].size ? neighbors[a] : neighbors[b];
-    const largerSet = smallerSet === neighbors[a] ? neighbors[b] : neighbors[a];
-
-    for (const c of smallerSet) {
-      if (largerSet.has(c) && !triangleExists(a, b, c)) {
-        count += 1;
-      }
-    }
-
-    return count;
+  function countPotentialShapes(a, b) {
+    return modeDefinition.getScorePreview(a, b, modeContext);
   }
 
-  function addTrianglesForEdge(a, b, owner) {
-    let added = 0;
-    const newTriangles = [];
-
-    const smallerSet = neighbors[a].size <= neighbors[b].size ? neighbors[a] : neighbors[b];
-    const largerSet = smallerSet === neighbors[a] ? neighbors[b] : neighbors[a];
-
-    for (const c of smallerSet) {
-      if (largerSet.has(c) && !triangleExists(a, b, c)) {
-        const triangle = {a, b, c, owner};
-        state.triangles.push(triangle);
-        triangleLookup.add(triangleKey(a, b, c));
-        newTriangles.push(triangle);
-        added += 1;
-      }
-    }
-
+  function addShapesForEdge(a, b, owner) {
+    const newShapes = modeDefinition.addShapesForEdge(a, b, owner, modeContext);
     return {
-      triangleCount: added,
-      newTriangles,
+      shapeCount: newShapes.length,
+      newShapes,
     };
   }
 
@@ -339,10 +619,11 @@ export function createGame(config) {
     state.edges.push({a, b, owner});
     updateLegalMovesAfterEdge(a, b);
     state.selectedPoint = null;
-    const {triangleCount, newTriangles} = addTrianglesForEdge(a, b, owner);
-    state.scores[owner] += triangleCount;
 
-    if (triangleCount === 0) {
+    const {shapeCount, newShapes} = addShapesForEdge(a, b, owner);
+    state.scores[owner] += shapeCount;
+
+    if (shapeCount === 0) {
       state.currentPlayer = (state.currentPlayer + 1) % state.players.length;
     }
 
@@ -352,9 +633,43 @@ export function createGame(config) {
 
     return {
       ok: true,
-      triangleCount,
-      scoreDelta: triangleCount,
-      newTriangles,
+      shapeCount,
+      scoreDelta: shapeCount,
+      newShapes,
+      owner,
+      nextPlayer: state.currentPlayer,
+      gameOver: state.isGameOver,
+    };
+  }
+
+  function skipTurn(reason = 'timeout') {
+    if (state.isGameOver) {
+      return {
+        ok: false,
+        reason: 'game-over',
+      };
+    }
+
+    state.selectedPoint = null;
+    const owner = state.currentPlayer;
+    let scoreDelta = 0;
+
+    if (reason === 'timeout') {
+      state.scores[owner] -= 1;
+      scoreDelta = -1;
+    }
+
+    state.currentPlayer = (state.currentPlayer + 1) % state.players.length;
+
+    if (getPossibleMoves().length === 0) {
+      finishGame();
+    }
+
+    return {
+      ok: true,
+      skipped: true,
+      skipReason: reason,
+      scoreDelta,
       owner,
       nextPlayer: state.currentPlayer,
       gameOver: state.isGameOver,
@@ -371,7 +686,7 @@ export function createGame(config) {
     return null;
   }
 
-  function getAIMove() {
+  function getAIMove(difficulty = 'medium') {
     const moves = getPossibleMoves();
 
     if (!moves.length) {
@@ -379,21 +694,27 @@ export function createGame(config) {
       return null;
     }
 
-    let bestScore = -1;
-    const bestMoves = [];
-
-    for (const [a, b] of moves) {
-      const score = countPotentialTriangles(a, b);
-      if (score > bestScore) {
-        bestScore = score;
-        bestMoves.length = 0;
-        bestMoves.push([a, b]);
-      } else if (score === bestScore) {
-        bestMoves.push([a, b]);
-      }
+    if (difficulty === 'easy') {
+      return moves[Math.floor(Math.random() * moves.length)];
     }
 
-    return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+    const owner = state.currentPlayer;
+    const scoredMoves = moves
+      .map(([a, b]) => ({
+        move: [a, b],
+        score: evaluateMove(a, b, owner, difficulty),
+        immediateScore: countPotentialShapes(a, b),
+      }))
+      .sort((left, right) => right.score - left.score);
+
+    if (difficulty === 'medium') {
+      const highestImmediate = Math.max(...scoredMoves.map((item) => item.immediateScore));
+      const strongMoves = scoredMoves.filter((item) => item.immediateScore === highestImmediate).slice(0, 3);
+      const pool = strongMoves.length > 0 ? strongMoves : scoredMoves.slice(0, 3);
+      return pool[Math.floor(Math.random() * pool.length)].move;
+    }
+
+    return scoredMoves[0].move;
   }
 
   initializeLegalMoves();
@@ -403,9 +724,10 @@ export function createGame(config) {
     canAddEdge,
     choosePointAt,
     applyMove,
+    skipTurn,
     getPossibleMoves,
     getAIMove,
-    countPotentialTriangles,
+    countPotentialShapes,
     offsetPoint,
   };
 }

@@ -34,7 +34,7 @@ export function createRenderer(canvas, game) {
     context.restore();
   }
 
-  function drawBackground(state) {
+function drawBackground(state) {
     const gradient = context.createLinearGradient(0, 0, state.width, state.height);
     gradient.addColorStop(0, '#11243d');
     gradient.addColorStop(0.45, '#10213a');
@@ -55,16 +55,17 @@ export function createRenderer(canvas, game) {
     context.restore();
   }
 
-  function drawTriangles(state) {
-    for (const triangle of state.triangles) {
-      const a = state.points[triangle.a];
-      const b = state.points[triangle.b];
-      const c = state.points[triangle.c];
-      context.fillStyle = state.players[triangle.owner].triangleColor;
+  function drawShapes(state) {
+    for (const shape of state.shapes) {
+      const [firstPoint, ...restPoints] = shape.points.map((pointIndex) => state.points[pointIndex]);
+      context.fillStyle = state.players[shape.owner].shapeColor;
       context.beginPath();
-      context.moveTo(a.x, a.y);
-      context.lineTo(b.x, b.y);
-      context.lineTo(c.x, c.y);
+      context.moveTo(firstPoint.x, firstPoint.y);
+
+      for (const point of restPoints) {
+        context.lineTo(point.x, point.y);
+      }
+
       context.closePath();
       context.fill();
     }
@@ -130,7 +131,7 @@ export function createRenderer(canvas, game) {
     const {state} = game;
     context.clearRect(0, 0, state.width, state.height);
     drawBackground(state);
-    drawTriangles(state);
+    drawShapes(state);
     drawEdges(state);
     drawPoints(state);
     drawSelection(state);
