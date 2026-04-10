@@ -58,5 +58,5 @@ const server = http.createServer((request, response) => {
 });
 
 server.listen(port, () => {
-  console.log(`Close Triangle is running at http://localhost:${port}`);
+  console.log(`Triangle Trap is running at http://localhost:${port}`);
 });

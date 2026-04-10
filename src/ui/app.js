@@ -81,7 +81,7 @@ function createLandingScreen() {
   section.innerHTML = `
     <div class="hero">
       <div class="hero-copy">
-        <span class="eyebrow">Close Triangle</span>
+        <span class="eyebrow">Triangle Trap</span>
         <h1>משחק סגירת משולשים</h1>
         <p>
           גרסה מחודשת עם מסך פתיחה ברור, התאמה לכל שחקן, לוח משחק נקי וממשק שמרגיש כמו משחק אמיתי ולא כמו דמו טכני.
