@@ -1,0 +1,11 @@
+{
+  "name": "close-triangle",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Triangle closing game with a polished landing page and modular frontend architecture.",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js"
+  }
+}
