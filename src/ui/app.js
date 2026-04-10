@@ -133,25 +133,12 @@ function createLandingScreen() {
   section.innerHTML = `
     <div class="hero">
       <div class="hero-copy">
-        <span class="eyebrow">Triangle Trap</span>
         <h1>משחק סגירת צורות</h1>
         <p>
           פותחים סיבוב חדש בשני שלבים פשוטים: קודם בוחרים סוג משחק ולוח, ואחר כך מגדירים את השחקנים.
         </p>
-        <div class="hero-badges">
-          <span>מסך פתיחה קליל</span>
-          <span>מצב משולשים</span>
-          <span>מצב מרובעים</span>
-          <span>שחקני מחשב</span>
-        </div>
-      </div>
-      <div class="hero-preview">
         <div class="preview-orb orb-a"></div>
         <div class="preview-orb orb-b"></div>
-        <div class="preview-card">
-          <span>זרימה חדשה</span>
-          <strong>שלב ראשון ללוח, שלב שני לשחקנים, ואז מתחילים לשחק.</strong>
-        </div>
       </div>
     </div>
     <div class="setup-shell">
